@@ -1,62 +1,76 @@
 # CMPS426 Secure Password Manager
 
 ## Overview
-This project is Part 1 of the CMPS426 Security Course Project[cite: 1]. It is a command-line based Secure Password Manager designed to securely store, retrieve, and manage credentials[cite: 1]. 
 
-The application implements several core cryptographic concepts:
-*   **AES (GCM Mode):** For secure vault encryption and decryption[cite: 1].
-*   **SHA-256:** For hashing operations and deriving data keys from the master password[cite: 1].
-*   **ElGamal Digital Signatures:** Implemented from scratch to ensure vault integrity and protect against tampering[cite: 1].
-*   **Diffie-Hellman Key Exchange:** Implemented from scratch to facilitate secure vault exports between devices/users[cite: 1].
+This is a command-line Secure Password Manager for the CMPS426 Security Course Project. It stores credentials in an AES-GCM encrypted vault, signs vault data with ElGamal digital signatures, and supports secure vault export/import through an authenticated Diffie-Hellman session.
+
+The program implements the 4 required modules:
+
+1. **ElGamal Key Management**
+   - Generates ElGamal parameters and a long-term public/private signing key pair.
+   - Protects the private key locally using AES-GCM with a key protection password.
+   - Exports the public key to `{username}_public_key.json`.
+
+2. **Vault Encryption & Credential Management**
+   - Derives an AES-256 key from the master password using SHA-256.
+   - Encrypts the full vault with AES-GCM.
+   - Supports add, retrieve, update, and delete operations.
+
+3. **Digital Signatures for Vault Integrity**
+   - Signs the encrypted vault content after every modification.
+   - Verifies the signature before opening the vault.
+   - Refuses to open the vault if tampering is detected.
+
+4. **Secure Vault Export via Diffie-Hellman**
+   - Generates ephemeral DH keys per export session.
+   - Signs and verifies both DH public keys using ElGamal.
+   - Derives a shared AES session key from the DH secret.
+   - Encrypts and signs the export package.
+   - Simulates recipient-side import by decrypting the package, re-encrypting it with the recipient's master password, and signing the recipient vault with the recipient's private key.
 
 ## Prerequisites
-To run this application, you must have Python 3.8 or higher installed on your system. 
 
-You will also need to install the `pycryptodome` library, which is used strictly for AES encryption and SHA hashing as permitted by the project guidelines[cite: 1]. 
+Install Python 3.8 or newer and pycryptodome:
 
-Install the required dependency using pip:
 ```bash
 pip install pycryptodome
+```
 
-How to Run the Application
-1.Open your terminal or command prompt.
+## How to Run
 
-2.Navigate to the directory containing the project files.
+From this directory:
 
-3.Execute the main Python script:
-    python password_manager.py
+```bash
+python password_manager.py
+```
 
-## Workflow & Usage Guide
+If you are one directory above `Security-Project`, run:
 
-Upon launching the application, you will be prompted to enter your **username**. 
+```bash
+python Security-Project/password_manager.py
+```
 
-*   **First-Time Users:** If this is your first time logging in, the system will automatically initialize your profile by generating an ElGamal public/private key pair[cite: 1]. These keys are saved locally in a `{username}_keys.json` file.
-*   **Returning Users:** The system will load your existing key pair to verify and sign your vault.
+## CLI Menu
 
-Once logged in, you will be presented with a CLI menu offering the following options:
+After entering your username and unlocking or creating your protected key file, the app shows:
 
-### 1. Add Credential
-*   You will be prompted to enter your **Master Password**. 
-*   The system uses this password to derive an AES key and decrypt your vault in memory[cite: 1].
-*   Enter the Website, Username, and Password for the new credential.
-*   The system will re-encrypt the vault and generate a fresh ElGamal digital signature over the encrypted contents before saving it to disk[cite: 1].
+1. Add Credential
+2. Retrieve Credential
+3. Update Credential
+4. Delete Credential
+5. Export Vault (Diffie-Hellman)
+6. Export Public Key
+7. Exit
 
-### 2. View Credentials
-*   Enter your **Master Password**.
-*   The system will first verify the ElGamal signature to ensure the vault file hasn't been tampered with[cite: 1]. If the signature is invalid, the vault will refuse to open[cite: 1].
-*   If valid, the vault decrypts and displays your stored credentials[cite: 1].
+## Generated Files
 
-### 3. Export Vault (Diffie-Hellman)
-*   This module simulates a secure export to another device.
-*   Enter your **Master Password** to unlock your local vault.
-*   The system will automatically generate ephemeral Diffie-Hellman parameters and perform a simulated key exchange with a receiving device[cite: 1]. 
-*   Both the sent and received DH public keys are signed using ElGamal to prevent Man-in-the-Middle attacks[cite: 1].
-*   A 256-bit session key is derived from the DH shared secret, which is then used to securely encrypt the vault data for transit[cite: 1].
+- `{username}_keys.json`: local protected private key plus public parameters.
+- `{username}_public_key.json`: exportable public key file.
+- `{username}_vault.json`: AES-GCM encrypted vault plus ElGamal signature.
+- `{sender}_to_{recipient}_export_package.json`: encrypted and signed transfer package generated during DH export.
 
-### 4. Exit
-*   Safely closes the application.
+## Notes
 
-## File Structure
-*   `password_manager.py`: The main application script containing all 4 required modules[cite: 1].
-*   `{username}_keys.json`: Stores your generated ElGamal public and private keys (generated on first run).
-*   `{username}_vault.json`: The AES-encrypted vault containing your credentials and the ElGamal digital signature[cite: 1].
+- The key protection password protects the ElGamal private signing key.
+- The master password protects the password vault contents.
+- Prime generation is handled through pycryptodome, while ElGamal signing/verification, modular inverse, GCD, and Diffie-Hellman shared-secret logic are implemented directly in the project code.
