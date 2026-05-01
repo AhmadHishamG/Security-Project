@@ -5,6 +5,8 @@ import secrets
 import base64
 from Crypto.Util.number import getPrime
 from Crypto.Cipher import AES
+
+
 def compute_gcd(a, b):
     """
     Computes the Greatest Common Divisor (GCD) using the Euclidean Algorithm.
@@ -29,7 +31,7 @@ def mod_inverse(a, m):
     while a > 1:
         # q is quotient
         q = a // m
-        # m is remainder now, process same as Euclid's algorithm
+        # m is remainder now
         m, a = a % m, m
         
         # Update x0 and x1
@@ -64,7 +66,7 @@ class ElGamal:
         r = pow(g, k, p)
         
         # 3. Calculate the modular inverse of k modulo (p-1)
-        k_inv = mod_inverse(k, p - 1)      # <-- USING YOUR INVERSE
+        k_inv = mod_inverse(k, p - 1) 
         
         # 4. Calculate s = (h_m - x * r) * k_inv mod (p-1)
         s = ((h_m - x * r) * k_inv) % (p - 1)
@@ -81,9 +83,6 @@ class ElGamal:
         v2 = (pow(y, r, p) * pow(r, s, p)) % p
         return v1 == v2
 
-# ==========================================
-# MODULE 4: Diffie-Hellman Key Exchange
-# ==========================================
 class DiffieHellman:
     @staticmethod
     def generate_parameters(bits=512):
@@ -103,9 +102,6 @@ class DiffieHellman:
         # Derive a 256-bit AES key from the shared secret
         return hashlib.sha256(str(shared_secret).encode()).digest()
 
-# ==========================================
-# MODULE 2: Vault Operations
-# ==========================================
 class Vault:
     def __init__(self, username):
         self.username = username
@@ -191,11 +187,9 @@ class Vault:
             print("[!] ALERT: Decryption failed. Incorrect master password.")
         return creds
 
-# ==========================================
-# CLI INTERFACE
-# ==========================================
+
 def main():
-    print("=== CMPS426 Secure Password Manager ===")
+    print("=== Team 5 Password Manager ===")
     user = input("Enter your username: ")
     vault = Vault(user)
     
