@@ -17,7 +17,6 @@ def format_signature(signature):
     r, s = signature
     return f"{r},{s}"
 
-
 def parse_signature(signature_text):
     r, s = signature_text.split(",", 1)
     return int(r), int(s)
