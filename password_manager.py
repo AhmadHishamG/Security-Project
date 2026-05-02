@@ -1,11 +1,149 @@
 import base64
 import hashlib
 import json
+import math
 import os
+import secrets
 
 from Crypto.Cipher import AES
+from Crypto.Util.number import getPrime, isPrime
 
-from module3and4 import DiffieHellman, ElGamal
+
+def generate_k(p):
+    while True:
+        k = secrets.randbelow(p - 2) + 1
+        if math.gcd(k, p - 1) == 1:
+            return k
+
+
+def doingSha256ToVault(vaultData):
+    if isinstance(vaultData, str):
+        vaultData = vaultData.encode()
+    digest = hashlib.sha256(vaultData).digest()
+    return digest
+
+
+def sign(data, x, q, g, p):
+    message = int.from_bytes(doingSha256ToVault(data), byteorder="big") % (p - 1)
+    k = generate_k(p)
+    r = pow(g, k, p)
+    s = ((message - x * r) * pow(k, -1, p - 1)) % (p - 1)
+    return r, s
+
+
+def verify(data, signature, q, publicKey, p, g, message=None):
+    r, s = signature
+
+    if not (0 < r < p):
+        return False
+    if not (0 < s < p - 1):
+        return False
+
+    if message is None:
+        message = int.from_bytes(doingSha256ToVault(data), byteorder="big") % (p - 1)
+
+    v1 = (pow(publicKey, r, p) * pow(r, s, p)) % p
+    v2 = pow(g, message, p)
+
+    if v1 == v2:
+        return True
+
+    print("Warning: Verification failed.")
+    return False
+
+
+def primitiveRootChecker(alpha, p):
+    q = (p - 1) // 2
+
+    if alpha <= 1 or alpha >= p:
+        return False
+    if pow(alpha, 2, p) == 1:
+        return False
+    if pow(alpha, q, p) == 1:
+        return False
+
+    return True
+
+
+def generateSafePrimeAndGenerator(bits=512):
+    while True:
+        q = getPrime(bits - 1)
+        p = 2 * q + 1
+        if isPrime(p):
+            break
+
+    while True:
+        alpha = secrets.randbelow(p - 3) + 2
+        if primitiveRootChecker(alpha, p):
+            return p, alpha
+
+
+def generatePrivateKey(q):
+    return secrets.randbelow(q - 2) + 1
+
+
+def generatePublicKey(x, alpha, q):
+    return pow(alpha, x, q)
+
+
+def computeSharedSecret(otherPublicKey, myPrivateKey, q):
+    return pow(otherPublicKey, myPrivateKey, q)
+
+
+def deriveSessionKey(sharedSecret):
+    sharedSecretBytes = str(sharedSecret).encode()
+    return hashlib.sha256(sharedSecretBytes).digest()
+
+
+def keyExchange(q1, alpha1):
+    device1PrivateKey = generatePrivateKey(q1)
+    device2PrivateKey = generatePrivateKey(q1)
+
+    public_key1 = generatePublicKey(device1PrivateKey, alpha1, q1)
+    public_key2 = generatePublicKey(device2PrivateKey, alpha1, q1)
+
+    device1SharedSecret = computeSharedSecret(public_key2, device1PrivateKey, q1)
+    device2SharedSecret = computeSharedSecret(public_key1, device2PrivateKey, q1)
+
+    if device1SharedSecret != device2SharedSecret:
+        raise ValueError("Diffie-Hellman key exchange failed.")
+
+    sessionKey = deriveSessionKey(device1SharedSecret)
+    return public_key1, public_key2, sessionKey
+
+
+class ElGamal:
+    @staticmethod
+    def generate_keys(bits=512):
+        p, g = generateSafePrimeAndGenerator(bits)
+        x = generatePrivateKey(p)
+        y = pow(g, x, p)
+        return p, g, x, y
+
+    @staticmethod
+    def sign(message, p, g, x):
+        return sign(message, x, None, g, p)
+
+    @staticmethod
+    def verify(message, r, s, p, g, y):
+        return verify(message, (r, s), None, y, p, g)
+
+
+class DiffieHellman:
+    @staticmethod
+    def generate_parameters(bits=512):
+        return generateSafePrimeAndGenerator(bits)
+
+    @staticmethod
+    def generate_keypair(q, alpha):
+        private_key = generatePrivateKey(q)
+        public_key = generatePublicKey(private_key, alpha, q)
+        return private_key, public_key
+
+    @staticmethod
+    def compute_secret(other_public, my_private, q):
+        shared_secret = computeSharedSecret(other_public, my_private, q)
+        return deriveSessionKey(shared_secret)
 
 
 def canonical_json(data):
@@ -21,6 +159,31 @@ def format_signature(signature):
 def parse_signature(signature_text):
     r, s = signature_text.split(",", 1)
     return int(r), int(s)
+
+
+DH_CONFIG_FILE = "dh_config.json"
+
+
+def parse_config_int(value):
+    if isinstance(value, int):
+        return value
+    return int(value, 0)
+
+
+def load_dh_parameters(config_file=DH_CONFIG_FILE):
+    """Load shared public DH parameters, creating the config on first use."""
+    if os.path.exists(config_file):
+        with open(config_file, "r") as f:
+            config = json.load(f)
+
+        return parse_config_int(config["q"]), parse_config_int(config["alpha"])
+
+    q, alpha = DiffieHellman.generate_parameters()
+    with open(config_file, "w") as f:
+        json.dump({"q": q, "alpha": alpha}, f, indent=2)
+
+    print(f"[*] Created shared DH parameter config: {config_file}")
+    return q, alpha
 
 
 # ==========================================
@@ -296,6 +459,61 @@ def verify_with_public_key(message, signature, public_key_data):
     )
 
 
+def create_vault_export_package(
+    sender_vault,
+    recipient_vault,
+    q,
+    alpha,
+    sender_dh_public,
+    sender_dh_signature,
+    recipient_dh_public,
+    recipient_dh_signature,
+    encrypted_export,
+    export_signature,
+):
+    """Build the encrypted transfer package that Device 1 sends to Device 2."""
+    return {
+        "sender": sender_vault.username,
+        "recipient": recipient_vault.username,
+        "dh_parameters": {"q": q, "alpha": alpha},
+        "sender_public_key": sender_vault.public_key_data(),
+        "recipient_public_key": recipient_vault.public_key_data(),
+        "sender_dh_public": sender_dh_public,
+        "sender_dh_signature": format_signature(sender_dh_signature),
+        "recipient_dh_public": recipient_dh_public,
+        "recipient_dh_signature": format_signature(recipient_dh_signature),
+        "encrypted_vault": encrypted_export,
+        "export_signature": format_signature(export_signature),
+    }
+
+
+def import_vault_export_package(
+    recipient_vault, recipient_master_password, package, session_key
+):
+    """Device 2 verifies, decrypts, and re-saves the imported vault locally."""
+    if package["recipient"] != recipient_vault.username:
+        print("[!] Package recipient does not match the unlocked recipient vault.")
+        return False
+
+    encrypted_export = package["encrypted_vault"]
+    export_signature = parse_signature(package["export_signature"])
+    sender_public_key_data = package["sender_public_key"]
+
+    if not verify_with_public_key(
+        encrypted_export, export_signature, sender_public_key_data
+    ):
+        print("[!] Recipient rejected transfer package signature. Import aborted.")
+        return False
+
+    imported_credentials = recipient_vault._decrypt_data(encrypted_export, session_key)
+    if imported_credentials is None:
+        print("[!] Recipient could not decrypt transfer package.")
+        return False
+
+    recipient_vault.save_vault(recipient_master_password, imported_credentials)
+    return True
+
+
 def export_vault_with_diffie_hellman(sender_vault):
     print("\n--- Secure Vault Export via Diffie-Hellman ---")
     sender_master_password = input("Sender master password: ")
@@ -314,8 +532,10 @@ def export_vault_with_diffie_hellman(sender_vault):
 
     recipient_master_password = input("Recipient master password for imported vault: ")
 
+    print("[*] Loading shared Diffie-Hellman parameters...")
+    q, alpha = load_dh_parameters()
+
     print("[*] Generating ephemeral Diffie-Hellman keys...")
-    q, alpha = DiffieHellman.generate_parameters()
     sender_dh_private, sender_dh_public = DiffieHellman.generate_keypair(q, alpha)
     recipient_dh_private, recipient_dh_public = DiffieHellman.generate_keypair(q, alpha)
 
@@ -354,36 +574,28 @@ def export_vault_with_diffie_hellman(sender_vault):
         encrypted_export, sender_vault.p, sender_vault.g, sender_vault.priv_key
     )
 
-    package = {
-        "sender": sender_vault.username,
-        "recipient": recipient_vault.username,
-        "dh_parameters": {"q": q, "alpha": alpha},
-        "sender_dh_public": sender_dh_public,
-        "sender_dh_signature": format_signature(sender_dh_signature),
-        "recipient_dh_public": recipient_dh_public,
-        "recipient_dh_signature": format_signature(recipient_dh_signature),
-        "encrypted_vault": encrypted_export,
-        "export_signature": format_signature(export_signature),
-    }
+    package = create_vault_export_package(
+        sender_vault,
+        recipient_vault,
+        q,
+        alpha,
+        sender_dh_public,
+        sender_dh_signature,
+        recipient_dh_public,
+        recipient_dh_signature,
+        encrypted_export,
+        export_signature,
+    )
     package_file = f"{sender_vault.username}_to_{recipient_vault.username}_export_package.json"
     with open(package_file, "w") as f:
         json.dump(package, f, indent=2)
 
     print("[*] Transfer package written and signed.")
-    if not verify_with_public_key(
-        encrypted_export, export_signature, sender_vault.public_key_data()
+    if not import_vault_export_package(
+        recipient_vault, recipient_master_password, package, recipient_session_key
     ):
-        print("[!] Recipient rejected transfer package signature. Import aborted.")
         return
 
-    imported_credentials = recipient_vault._decrypt_data(
-        encrypted_export, recipient_session_key
-    )
-    if imported_credentials is None:
-        print("[!] Recipient could not decrypt transfer package.")
-        return
-
-    recipient_vault.save_vault(recipient_master_password, imported_credentials)
     print(f"[*] Import complete. Recipient vault saved as {recipient_vault.vault_file}.")
     print(f"[*] Export package saved as {package_file}.")
 
