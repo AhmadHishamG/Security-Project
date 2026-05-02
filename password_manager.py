@@ -185,9 +185,6 @@ def load_dh_parameters(config_file=DH_CONFIG_FILE):
     return q, alpha
 
 
-# ==========================================
-# MODULE 2: Vault Operations
-# ==========================================
 class Vault:
     def __init__(self, username):
         self.username = username
@@ -444,7 +441,7 @@ def delete_credential(vault):
         return
 
     confirm = input(f"Delete {site}? Type YES to confirm: ")
-    if confirm != "YES":
+    if confirm != "YES" and confirm != "yes":
         print("[*] Delete cancelled.")
         return
     if site == "whole_vault":
@@ -650,6 +647,7 @@ def main():
             vault.export_public_key()
             print(f"[*] Public key exported to {vault.public_key_file}.")
         elif choice == "7":
+            print("Thank you for using our password manager! Goodbye!")
             break
         else:
             print("[!] Invalid choice.")
