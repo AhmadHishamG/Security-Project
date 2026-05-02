@@ -2,15 +2,10 @@ import base64
 import hashlib
 import json
 import os
-import sys
-from pathlib import Path
 
 from Crypto.Cipher import AES
 
-sys.path.append(str(Path(__file__).resolve().parent.parent))
-
-from module3 import ElGamal
-from module4 import DiffieHellman
+from module3and4 import DiffieHellman, ElGamal
 
 
 def canonical_json(data):
