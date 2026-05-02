@@ -23,9 +23,6 @@ def parse_signature(signature_text):
     return int(r), int(s)
 
 
-# ==========================================
-# MODULE 2: Vault Operations
-# ==========================================
 class Vault:
     def __init__(self, username):
         self.username = username
@@ -191,19 +188,25 @@ def choose_existing_site(credentials):
 
     print("\n--- Stored Sites ---")
     sites = list(credentials.keys())
+    
     for index, site in enumerate(sites, start=1):
         print(f"{index}. {site}")
-
-    choice = input("Choose site number: ")
+        i=index
+    if index > 1:
+        print(f"{i+1}. whole vault")
+        choice = input(f"Choose site number or {i+1} for the whole vault: ")
+    else:
+        choice = input("Choose site number: ")
     if not choice.isdigit():
         print("[!] Invalid selection.")
         return None
 
     index = int(choice) - 1
-    if index < 0 or index >= len(sites):
+    if index < 0 or index >= len(sites)+1:
         print("[!] Invalid selection.")
         return None
-
+    if index == i:
+        return "whole_vault"
     return sites[index]
 
 
@@ -230,7 +233,13 @@ def retrieve_credential(vault):
     site = choose_existing_site(credentials)
     if site is None:
         return
-
+    if site == "whole_vault":
+        print("\n--- Full Vault ---")
+        for site, data in credentials.items():
+            print(f"\nSite: {site}")
+            print(f"Username: {data['username']}")
+            print(f"Password: {data['password']}")
+        return
     data = credentials[site]
     print("\n--- Credential ---")
     print(f"Site: {site}")
@@ -273,7 +282,13 @@ def delete_credential(vault):
     if confirm != "YES":
         print("[*] Delete cancelled.")
         return
-
+    if site == "whole_vault":
+        sites = list(credentials.keys())
+        print(f"[*] Deleting entire vault with {len(sites)} sites...")
+        credentials.clear()
+        vault.save_vault(master_password, credentials)
+        print("[*] Whole vault deleted and re-signed.")
+        return
     del credentials[site]
     vault.save_vault(master_password, credentials)
     print("[*] Credential deleted and vault re-signed.")
@@ -388,11 +403,7 @@ def export_vault_with_diffie_hellman(sender_vault):
     print(f"[*] Export package saved as {package_file}.")
 
 
-# ==========================================
-# CLI INTERFACE
-# ==========================================
 def main():
-    print("=== CMPS426 Secure Password Manager ===")
     user = input("Enter your username: ")
     vault = unlock_or_create_user(user)
     if vault is None:
@@ -400,6 +411,7 @@ def main():
 
     while True:
         print(
+            "\nlogged in as: " + vault.username +
             "\n1. Add Credential"
             "\n2. Retrieve Credential"
             "\n3. Update Credential"
