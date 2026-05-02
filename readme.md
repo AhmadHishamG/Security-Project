@@ -1,32 +1,4 @@
-# CMPS426 Secure Password Manager
-
-## Overview
-
-This is a command-line Secure Password Manager for the CMPS426 Security Course Project. It stores credentials in an AES-GCM encrypted vault, signs vault data with ElGamal digital signatures, and supports secure vault export/import through an authenticated Diffie-Hellman session.
-
-The program implements the 4 required modules:
-
-1. **ElGamal Key Management**
-   - Generates ElGamal parameters and a long-term public/private signing key pair.
-   - Protects the private key locally using AES-GCM with a key protection password.
-   - Exports the public key to `{username}_public_key.json`.
-
-2. **Vault Encryption & Credential Management**
-   - Derives an AES-256 key from the master password using SHA-256.
-   - Encrypts the full vault with AES-GCM.
-   - Supports add, retrieve, update, and delete operations.
-
-3. **Digital Signatures for Vault Integrity**
-   - Signs the encrypted vault content after every modification.
-   - Verifies the signature before opening the vault.
-   - Refuses to open the vault if tampering is detected.
-
-4. **Secure Vault Export via Diffie-Hellman**
-   - Generates ephemeral DH keys per export session.
-   - Signs and verifies both DH public keys using ElGamal.
-   - Derives a shared AES session key from the DH secret.
-   - Encrypts and signs the export package.
-   - Simulates recipient-side import by decrypting the package, re-encrypting it with the recipient's master password, and signing the recipient vault with the recipient's private key.
+## CMPS426 Secure Password Manager - Team 5
 
 ## Prerequisites
 
@@ -37,40 +9,60 @@ pip install pycryptodome
 ```
 
 ## How to Run
+Execute the script from your terminal:
 
-From this directory:
-
-```bash
+```Bash
 python password_manager.py
 ```
+## System Workflow & Usage
+1. Initialization and Login
+Upon running the application, enter your username.
 
-If you are one directory above `Security-Project`, run:
+First-time users: You will be prompted to create a Key Protection Password. This password protects your locally generated ElGamal private key.
 
-```bash
-python Security-Project/password_manager.py
-```
+Returning users: Enter your Key Protection Password to unlock your keys and access the main menu.
 
-## CLI Menu
+2. Main Menu Actions
+To perform any vault operations, you will be prompted for your Master Password. This acts as the root for your AES encryption data key.
 
-After entering your username and unlocking or creating your protected key file, the app shows:
+1. Add Credential: Prompts for a website name, username, and password. The vault is securely decrypted, updated, re-encrypted, and then re-signed.
 
-1. Add Credential
-2. Retrieve Credential
-3. Update Credential
-4. Delete Credential
-5. Export Vault (Diffie-Hellman)
-6. Export Public Key
-7. Exit
+2. Retrieve Credential: View a specific stored credential or print out the contents of the entire vault.
 
-## Generated Files
+3. Update Credential: Modify an existing username or password for a specific site.
 
-- `{username}_keys.json`: local protected private key plus public parameters.
-- `{username}_public_key.json`: exportable public key file.
-- `{username}_vault.json`: AES-GCM encrypted vault plus ElGamal signature.
-- `{sender}_to_{recipient}_export_package.json`: encrypted and signed transfer package generated during DH export.
+4. Delete Credential: Remove a single site credential or securely wipe the entire vault.
 
-## Notes
+5. Export Vault (Diffie-Hellman): Securely transfer your vault to another user/device (see details below).
 
-- The key protection password protects the ElGamal private signing key.
-- The master password protects the password vault contents.
-- Prime generation is handled through pycryptodome, while ElGamal signing/verification, modular inverse, GCD, and Diffie-Hellman shared-secret logic are implemented directly in the project code.
+6. Export Public Key: Generates a JSON file of your ElGamal public key, which can be shared with others for signature verification.
+
+7. Exit: Safely close the application.
+
+3. Secure Vault Export (Diffie-Hellman Transfer)
+This feature allows Device 1 to securely send an encrypted vault to Device 2, mimicking an end-to-end encrypted transfer.
+
+The sender selects Export Vault.
+
+Enter the sender's master password to unlock the vault for the transfer.
+
+Input the recipient's username (the recipient must have an initialized profile on the machine).
+
+Enter the recipient's master password (this represents what the recipient will use to encrypt the newly imported vault).
+
+The application will perform an ephemeral Diffie-Hellman key exchange, sign the public keys with ElGamal to prevent Man-in-the-Middle (MITM) attacks, and encrypt the vault using the derived AES session key.
+
+The transfer package is created and automatically ingested, verified, decrypted, and re-encrypted into the recipient's local vault.
+
+Generated Files Structure
+The application automatically generates the following files in its working directory:
+
+[username]_vault.json: The AES-encrypted vault containing credentials and its ElGamal digital signature.
+
+[username]_keys.json: Your ElGamal parameters and AES-encrypted private key.
+
+[username]_public_key.json: Your exportable ElGamal public key for sharing.
+
+dh_config.json: The shared configuration containing the Diffie-Hellman prime and generator parameters.
+
+[sender]_to_[recipient]_export_package.json: The transit package generated during a secure vault export.
