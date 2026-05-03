@@ -346,33 +346,39 @@ def unlock_or_create_user(username):
     return None
 
 
-def choose_existing_site(credentials):
+def choose_existing_site(credentials, allow_whole_vault=False):
     if not credentials:
         print("[!] Vault is empty.")
         return None
 
     print("\n--- Stored Sites ---")
     sites = list(credentials.keys())
-    
+
     for index, site in enumerate(sites, start=1):
         print(f"{index}. {site}")
-        i=index
-    if index > 1:
-        print(f"{i+1}. whole vault")
-        choice = input(f"Choose site number or {i+1} for the whole vault: ")
+
+    whole_vault_choice = len(sites) + 1
+    if allow_whole_vault:
+        print(f"{whole_vault_choice}. Whole vault")
+        choice = input(
+            f"Choose site number or {whole_vault_choice} for the whole vault: "
+        )
     else:
         choice = input("Choose site number: ")
+
     if not choice.isdigit():
         print("[!] Invalid selection.")
         return None
 
-    index = int(choice) - 1
-    if index < 0 or index >= len(sites)+1:
+    selected = int(choice)
+    if allow_whole_vault and selected == whole_vault_choice:
+        return "whole_vault"
+
+    if selected < 1 or selected > len(sites):
         print("[!] Invalid selection.")
         return None
-    if index == i:
-        return "whole_vault"
-    return sites[index]
+
+    return sites[selected - 1]
 
 
 def add_credential(vault):
@@ -395,7 +401,7 @@ def retrieve_credential(vault):
     if credentials is None:
         return
 
-    site = choose_existing_site(credentials)
+    site = choose_existing_site(credentials, allow_whole_vault=True)
     if site is None:
         return
     if site == "whole_vault":
@@ -439,7 +445,7 @@ def delete_credential(vault):
     if credentials is None:
         return
 
-    site = choose_existing_site(credentials)
+    site = choose_existing_site(credentials, allow_whole_vault=True)
     if site is None:
         return
 
